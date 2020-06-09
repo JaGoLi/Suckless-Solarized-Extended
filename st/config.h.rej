@@ -1,0 +1,15 @@
+--- /dev/null
++++ /dev/null
+@@ -116,9 +150,9 @@
+  * Default colors (colorname index)
+  * foreground, background, cursor
+  */
+-static unsigned int defaultfg = 7;
+-static unsigned int defaultbg = 0;
+-static unsigned int defaultcs = 256;
++static unsigned int defaultfg = 11;
++static unsigned int defaultbg = 8;
++static unsigned int defaultcs = 14;
+ 
+ /*
+  * Colors used, when the specific fg == defaultfg. So in reverse mode this

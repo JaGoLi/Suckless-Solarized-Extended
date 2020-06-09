@@ -1,0 +1,342 @@
+From 49fbc3f0a3d3524fa37ba4c0129425394b84feed Mon Sep 17 00:00:00 2001
+From: Julius Huelsmann <juliusHuelsmann@gmail.com>
+Date: Wed, 6 Nov 2019 21:59:28 +0100
+Subject: [PATCH 1/3] [PATCH:FOCUS]: first version
+
+---
+ config.def.h |  7 ++++++-
+ config.mk    |  2 +-
+ st.h         |  2 ++
+ x.c          | 59 +++++++++++++++++++++++++++++++++++++++-------------
+ 4 files changed, 54 insertions(+), 16 deletions(-)
+
+diff --git a/config.def.h b/config.def.h
+index 6ebea98..16f1ebd 100644
+--- a/config.def.h
++++ b/config.def.h
+@@ -82,6 +82,10 @@ char *termname = "st-256color";
+  */
+ unsigned int tabspaces = 8;
+ 
++/* bg opacity */
++float alpha = 0.8;           //< alpha value used when the window is focused.
++float alphaUnfocussed = 0.6; //< alpha value used when the focus is lost
++
+ /* Terminal colors (16 first used in escape sequence) */
+ static const char *colorname[] = {
+ 	/* 8 normal colors */
+@@ -109,6 +113,7 @@ static const char *colorname[] = {
+ 	/* more colors can be added after 255 to use with DefaultXX */
+ 	"#cccccc",
+ 	"#555555",
++	"black",
+ };
+ 
+ 
+@@ -117,7 +122,7 @@ static const char *colorname[] = {
+  * foreground, background, cursor, reverse cursor
+  */
+ unsigned int defaultfg = 7;
+-unsigned int defaultbg = 0;
++unsigned int defaultbg = 258;
+ static unsigned int defaultcs = 256;
+ static unsigned int defaultrcs = 257;
+ 
+diff --git a/config.mk b/config.mk
+index 0cbb002..1d2f0e2 100644
+--- a/config.mk
++++ b/config.mk
+@@ -16,7 +16,7 @@ PKG_CONFIG = pkg-config
+ INCS = -I$(X11INC) \
+        `$(PKG_CONFIG) --cflags fontconfig` \
+        `$(PKG_CONFIG) --cflags freetype2`
+-LIBS = -L$(X11LIB) -lm -lrt -lX11 -lutil -lXft \
++LIBS = -L$(X11LIB) -lm -lrt -lX11 -lutil -lXft -lXrender\
+        `$(PKG_CONFIG) --libs fontconfig` \
+        `$(PKG_CONFIG) --libs freetype2`
+ 
+diff --git a/st.h b/st.h
+index 4da3051..0bc69f8 100644
+--- a/st.h
++++ b/st.h
+@@ -120,3 +120,5 @@ extern char *termname;
+ extern unsigned int tabspaces;
+ extern unsigned int defaultfg;
+ extern unsigned int defaultbg;
++extern float alpha;
++extern float alphaUnfocussed;
+diff --git a/x.c b/x.c
+index 5828a3b..45bc960 100644
+--- a/x.c
++++ b/x.c
+@@ -4,6 +4,7 @@
+ #include <limits.h>
+ #include <locale.h>
+ #include <signal.h>
++#include <stdbool.h>
+ #include <sys/select.h>
+ #include <time.h>
+ #include <unistd.h>
+@@ -98,6 +99,7 @@ typedef struct {
+ 	XSetWindowAttributes attrs;
+ 	int scr;
+ 	int isfixed; /* is fixed geometry? */
++	int depth; /* bit depth */
+ 	int l, t; /* left and top offset */
+ 	int gm; /* geometry mask */
+ } XWindow;
+@@ -233,6 +235,7 @@ static char *usedfont = NULL;
+ static double usedfontsize = 0;
+ static double defaultfontsize = 0;
+ 
++static char *opt_alpha = NULL;
+ static char *opt_class = NULL;
+ static char **opt_cmd  = NULL;
+ static char *opt_embed = NULL;
+@@ -241,6 +244,7 @@ static char *opt_io    = NULL;
+ static char *opt_line  = NULL;
+ static char *opt_name  = NULL;
+ static char *opt_title = NULL;
++static bool focused = true;
+ 
+ static int oldbutton = 3; /* button event on startup: 3 = release */
+ 
+@@ -692,7 +696,7 @@ xresize(int col, int row)
+ 
+ 	XFreePixmap(xw.dpy, xw.buf);
+ 	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
+-			DefaultDepth(xw.dpy, xw.scr));
++			xw.depth);
+ 	XftDrawChange(xw.draw, xw.buf);
+ 	xclear(0, 0, win.w, win.h);
+ 
+@@ -752,6 +756,14 @@ xloadcols(void)
+ 			else
+ 				die("could not allocate color %d\n", i);
+ 		}
++
++	/* set alpha value of bg color */
++	if (opt_alpha)
++		alpha = strtof(opt_alpha, NULL);
++	float const usedAlpha = focused ? alpha : alphaUnfocussed;
++	dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * usedAlpha);
++	dc.col[defaultbg].pixel &= 0x00FFFFFF;
++	dc.col[defaultbg].pixel |= (unsigned char)(0xff * usedAlpha) << 24;
+ 	loaded = 1;
+ }
+ 
+@@ -1044,11 +1056,23 @@ xinit(int cols, int rows)
+ 	Window parent;
+ 	pid_t thispid = getpid();
+ 	XColor xmousefg, xmousebg;
++	XWindowAttributes attr;
++	XVisualInfo vis;
+ 
+ 	if (!(xw.dpy = XOpenDisplay(NULL)))
+ 		die("can't open display\n");
+ 	xw.scr = XDefaultScreen(xw.dpy);
+-	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
++
++	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0)))) {
++		parent = XRootWindow(xw.dpy, xw.scr);
++		xw.depth = 32;
++	} else {
++		XGetWindowAttributes(xw.dpy, parent, &attr);
++		xw.depth = attr.depth;
++	}
++
++	XMatchVisualInfo(xw.dpy, xw.scr, xw.depth, TrueColor, &vis);
++	xw.vis = vis.visual;
+ 
+ 	/* font */
+ 	if (!FcInit())
+@@ -1058,7 +1082,7 @@ xinit(int cols, int rows)
+ 	xloadfonts(usedfont, 0);
+ 
+ 	/* colors */
+-	xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
++	xw.cmap = XCreateColormap(xw.dpy, parent, xw.vis, None);
+ 	xloadcols();
+ 
+ 	/* adjust fixed window geometry */
+@@ -1078,19 +1102,15 @@ xinit(int cols, int rows)
+ 		| ButtonMotionMask | ButtonPressMask | ButtonReleaseMask;
+ 	xw.attrs.colormap = xw.cmap;
+ 
+-	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
+-		parent = XRootWindow(xw.dpy, xw.scr);
+ 	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
+-			win.w, win.h, 0, XDefaultDepth(xw.dpy, xw.scr), InputOutput,
++			win.w, win.h, 0, xw.depth, InputOutput,
+ 			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
+ 			| CWEventMask | CWColormap, &xw.attrs);
+ 
+ 	memset(&gcvalues, 0, sizeof(gcvalues));
+ 	gcvalues.graphics_exposures = False;
+-	dc.gc = XCreateGC(xw.dpy, parent, GCGraphicsExposures,
+-			&gcvalues);
+-	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
+-			DefaultDepth(xw.dpy, xw.scr));
++	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
++	dc.gc = XCreateGC(xw.dpy, xw.buf, GCGraphicsExposures, &gcvalues);
+ 	XSetForeground(xw.dpy, dc.gc, dc.col[defaultbg].pixel);
+ 	XFillRectangle(xw.dpy, xw.buf, dc.gc, 0, 0, win.w, win.h);
+ 
+@@ -1663,13 +1683,21 @@ focus(XEvent *ev)
+ 		XSetICFocus(xw.xic);
+ 		win.mode |= MODE_FOCUSED;
+ 		xseturgency(0);
+-		if (IS_SET(MODE_FOCUS))
+-			ttywrite("\033[I", 3, 0);
++		if (IS_SET(MODE_FOCUS)) { ttywrite("\033[I", 3, 0); }
++		if (!focused) {
++			focused = true;
++			xloadcols();
++			redraw();
++		}
+ 	} else {
+ 		XUnsetICFocus(xw.xic);
+ 		win.mode &= ~MODE_FOCUSED;
+-		if (IS_SET(MODE_FOCUS))
+-			ttywrite("\033[O", 3, 0);
++		if (IS_SET(MODE_FOCUS)) { ttywrite("\033[O", 3, 0); }
++		if (focused) {
++			focused = false;
++			xloadcols();
++			redraw();
++		}
+ 	}
+ }
+ 
+@@ -1925,6 +1953,9 @@ main(int argc, char *argv[])
+ 	case 'a':
+ 		allowaltscreen = 0;
+ 		break;
++	case 'A':
++		opt_alpha = EARGF(usage());
++		break;
+ 	case 'c':
+ 		opt_class = EARGF(usage());
+ 		break;
+-- 
+2.25.0
+
+
+From b442038e2f28b427f044a6bbd80481251ab532ad Mon Sep 17 00:00:00 2001
+From: "gloom @ t440p" <gloom@t440p>
+Date: Tue, 17 Dec 2019 18:43:31 +0800
+Subject: [PATCH 2/3] merge: fix: do not reset terminal colors when
+ focus/unfocus
+
+when using scripts which changes shell's
+default ANSI colors like base16-shell
+then focus/unfocus should not reset
+foreground colors to default ones
+---
+ x.c | 34 ++++++++++++++++++++++------------
+ 1 file changed, 22 insertions(+), 12 deletions(-)
+
+diff --git a/x.c b/x.c
+index 45bc960..7482adb 100644
+--- a/x.c
++++ b/x.c
+@@ -734,6 +734,20 @@ xloadcolor(int i, const char *name, Color *ncolor)
+ 	return XftColorAllocName(xw.dpy, xw.vis, xw.cmap, name, ncolor);
+ }
+ 
++void
++xloadalpha(void)
++{
++    /* set alpha value of bg color */
++    if (opt_alpha)
++        alpha = strtof(opt_alpha, NULL);
++
++    float const usedAlpha = focused ? alpha : alphaUnfocussed;
++
++    dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * usedAlpha);
++    dc.col[defaultbg].pixel &= 0x00FFFFFF;
++    dc.col[defaultbg].pixel |= (unsigned char)(0xff * usedAlpha) << 24;
++}
++
+ void
+ xloadcols(void)
+ {
+@@ -749,7 +763,7 @@ xloadcols(void)
+ 		dc.col = xmalloc(dc.collen * sizeof(Color));
+ 	}
+ 
+-	for (i = 0; i < dc.collen; i++)
++	for (i = 0; i < dc.collen; i++) 
+ 		if (!xloadcolor(i, NULL, &dc.col[i])) {
+ 			if (colorname[i])
+ 				die("could not allocate color '%s'\n", colorname[i]);
+@@ -757,13 +771,7 @@ xloadcols(void)
+ 				die("could not allocate color %d\n", i);
+ 		}
+ 
+-	/* set alpha value of bg color */
+-	if (opt_alpha)
+-		alpha = strtof(opt_alpha, NULL);
+-	float const usedAlpha = focused ? alpha : alphaUnfocussed;
+-	dc.col[defaultbg].color.alpha = (unsigned short)(0xffff * usedAlpha);
+-	dc.col[defaultbg].pixel &= 0x00FFFFFF;
+-	dc.col[defaultbg].pixel |= (unsigned char)(0xff * usedAlpha) << 24;
++	xloadalpha();
+ 	loaded = 1;
+ }
+ 
+@@ -1683,19 +1691,21 @@ focus(XEvent *ev)
+ 		XSetICFocus(xw.xic);
+ 		win.mode |= MODE_FOCUSED;
+ 		xseturgency(0);
+-		if (IS_SET(MODE_FOCUS)) { ttywrite("\033[I", 3, 0); }
++		if (IS_SET(MODE_FOCUS))
++			ttywrite("\033[I", 3, 0);
+ 		if (!focused) {
+ 			focused = true;
+-			xloadcols();
++			xloadalpha();
+ 			redraw();
+ 		}
+ 	} else {
+ 		XUnsetICFocus(xw.xic);
+ 		win.mode &= ~MODE_FOCUSED;
+-		if (IS_SET(MODE_FOCUS)) { ttywrite("\033[O", 3, 0); }
++		if (IS_SET(MODE_FOCUS))
++			ttywrite("\033[O", 3, 0);
+ 		if (focused) {
+ 			focused = false;
+-			xloadcols();
++			xloadalpha();
+ 			redraw();
+ 		}
+ 	}
+-- 
+2.25.0
+
+
+From dffad320251fbab67181a005436f320717658cf9 Mon Sep 17 00:00:00 2001
+From: M <mc.cm.mail@gmail.com>
+Date: Sun, 2 Feb 2020 14:20:52 +0100
+Subject: [PATCH 3/3] Remove stray trailing whitespace
+
+---
+ x.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/x.c b/x.c
+index 7482adb..cfbe64d 100644
+--- a/x.c
++++ b/x.c
+@@ -763,7 +763,7 @@ xloadcols(void)
+ 		dc.col = xmalloc(dc.collen * sizeof(Color));
+ 	}
+ 
+-	for (i = 0; i < dc.collen; i++) 
++	for (i = 0; i < dc.collen; i++)
+ 		if (!xloadcolor(i, NULL, &dc.col[i])) {
+ 			if (colorname[i])
+ 				die("could not allocate color '%s'\n", colorname[i]);
+-- 
+2.25.0
+
