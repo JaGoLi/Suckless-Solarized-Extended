@@ -1,0 +1,13 @@
+--- config.h	2020-04-21 15:09:22.352391851 -0400
++++ config.h.new	2020-04-21 15:27:43.584007017 -0400
+@@ -9,8 +9,8 @@
+ static const char *prompt      = NULL;      /* -p  option; prompt to the left of input field */
+ static const char *colors[SchemeLast][2] = {
+ 	/*     fg         bg       */
+-	[SchemeNorm] = { "#bbbbbb", "#222222" },
+-	[SchemeSel] = { "#eeeeee", "#005577" },
++	[SchemeNorm] = { "#839496", "#fdf6e3" },
++	[SchemeSel] = { "#fdf6e3", "#586e75" },
+ 	[SchemeOut] = { "#000000", "#00ffff" },
+ };
+ /* -l option; if nonzero, dmenu uses vertical list with given number of lines */
