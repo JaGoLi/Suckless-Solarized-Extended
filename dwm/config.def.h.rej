@@ -1,0 +1,17 @@
+--- config.def.h	2019-02-02 12:55:28.000000000 +0000
++++ config.def.h	2020-04-26 13:51:06.713332746 +0100
+@@ -60,10 +61,14 @@ static char dmenumon[2] = "0"; /* compon
+ static const char *dmenucmd[] = { "dmenu_run", "-m", dmenumon, "-fn", dmenufont, "-nb", col_gray1, "-nf", col_gray3, "-sb", col_cyan, "-sf", col_gray4, NULL };
+ static const char *termcmd[]  = { "st", NULL };
+ 
++/*First arg only serves to match against key in rules*/
++static const char *scratchpadcmd[] = {"s", "st", "-t", "scratchpad", NULL}; 
++
+ static Key keys[] = {
+ 	/* modifier                     key        function        argument */
+ 	{ MODKEY,                       XK_p,      spawn,          {.v = dmenucmd } },
+ 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
++	{ MODKEY,                       XK_grave,  togglescratch,  {.v = scratchpadcmd } },
+ 	{ MODKEY,                       XK_b,      togglebar,      {0} },
+ 	{ MODKEY,                       XK_j,      focusstack,     {.i = +1 } },
+ 	{ MODKEY,                       XK_k,      focusstack,     {.i = -1 } },
