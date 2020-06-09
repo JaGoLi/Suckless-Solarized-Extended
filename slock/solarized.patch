@@ -1,0 +1,20 @@
+--- config.def.h	2020-05-11 21:35:06.363329829 -0400
++++ config.h	2020-05-11 22:04:16.686351039 -0400
+@@ -1,12 +1,12 @@
+ /* user and group to drop privileges to */
+-static const char *user  = "nobody";
+-static const char *group = "nogroup";
++static const char *user  = "jason";
++static const char *group = "jason";
+ 
+ static const char *colorname[NUMCOLS] = {
+ 	[INIT] =   "black",     /* after initialization */
+-	[INPUT] =  "#005577",   /* during input */
+-	[FAILED] = "#CC3333",   /* wrong password */
++	[INPUT] =  "#073642",   /* during input */
++	[FAILED] = "#dc322f",   /* wrong password */
+ };
+ 
+ /* treat a cleared input like a wrong password (color) */
+-static const int failonclear = 1;
++static const int failonclear = 0;
