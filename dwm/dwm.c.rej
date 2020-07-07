@@ -1,35 +1,41 @@
 --- dwm.c
 +++ dwm.c
-@@ -431,18 +431,21 @@ buttonpress(XEvent *e)
- 	}
- 	if (ev->window == selmon->barwin) {
- 		i = x = 0;
--		do
--			x += TEXTW(tags[i]);
--		while (ev->x >= x && ++i < LENGTH(tags));
--		if (i < LENGTH(tags)) {
--			click = ClkTagBar;
--			arg.ui = 1 << i;
--		} else if (ev->x < x + blw)
-+		x += blw;
-+		if (ev->x < x) {
- 			click = ClkLtSymbol;
--		else if (ev->x > selmon->ww - TEXTW(stext))
--			click = ClkStatusText;
--		else
--			click = ClkWinTitle;
-+		} else {
-+			do
-+				x += TEXTW(tags[i]);
-+			while (ev->x >= x && ++i < LENGTH(tags));
-+			if (i < LENGTH(tags)) {
-+				click = ClkTagBar;
-+				arg.ui = 1 << i;
-+			} else if (ev->x > selmon->ww - TEXTW(stext))
-+				click = ClkStatusText;
-+			else
-+				click = ClkWinTitle;
-+		}
- 	} else if ((c = wintoclient(ev->window))) {
- 		focus(c);
- 		restack(selmon);
+@@ -40,6 +40,8 @@
+ #include <X11/extensions/Xinerama.h>
+ #endif /* XINERAMA */
+ #include <X11/Xft/Xft.h>
++#include <X11/Xlib-xcb.h>
++#include <xcb/res.h>
+ 
+ #include "drw.h"
+ #include "util.h"
+@@ -92,9 +94,11 @@ struct Client {
+ 	int basew, baseh, incw, inch, maxw, maxh, minw, minh;
+ 	int bw, oldbw;
+ 	unsigned int tags;
+-	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
++	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen, isterminal, noswallow;
++	pid_t pid;
+ 	Client *next;
+ 	Client *snext;
++	Client *swallowing;
+ 	Monitor *mon;
+ 	Window win;
+ };
+@@ -297,6 +312,7 @@ applyrules(Client *c)
+ 	XClassHint ch = { NULL, NULL };
+ 
+ 	/* rule matching */
++	c->noswallow = -1;
+ 	c->isfloating = 0;
+ 	c->tags = 0;
+ 	XGetClassHint(dpy, c->win, &ch);
+@@ -309,6 +325,8 @@ applyrules(Client *c)
+ 		&& (!r->class || strstr(class, r->class))
+ 		&& (!r->instance || strstr(instance, r->instance)))
+ 		{
++			c->isterminal = r->isterminal;
++			c->noswallow  = r->noswallow;
+ 			c->isfloating = r->isfloating;
+ 			c->tags |= r->tags;
+ 			for (m = mons; m && m->num != r->monitor; m = m->next);

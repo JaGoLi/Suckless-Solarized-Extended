@@ -1,0 +1,37 @@
+From 83c943dba9aacdfc9b9f3dd9964284e53e988d7a Mon Sep 17 00:00:00 2001
+From: MLquest8 <miskuzius@gmail.com>
+Date: Fri, 12 Jun 2020 16:36:31 +0400
+Subject: [PATCH] sizehints updated for version 6.2
+
+---
+ dwm.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/dwm.c b/dwm.c
+index 9fd0286..be85fce 100644
+--- a/dwm.c
++++ b/dwm.c
+@@ -1952,7 +1952,7 @@ updatesizehints(Client *c)
+ 
+ 	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
+ 		/* size is uninitialized, ensure that size.flags aren't used */
+-		size.flags = PSize;
++		size.flags = 0;
+ 	if (size.flags & PBaseSize) {
+ 		c->basew = size.base_width;
+ 		c->baseh = size.base_height;
+@@ -1984,6 +1984,11 @@ updatesizehints(Client *c)
+ 		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
+ 	} else
+ 		c->maxa = c->mina = 0.0;
++	if(size.flags & PSize) {
++		c->basew = size.base_width;
++		c->baseh = size.base_height;
++		c->isfloating = True;
++	}
+ 	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
+ }
+ 
+-- 
+2.26.2
+
